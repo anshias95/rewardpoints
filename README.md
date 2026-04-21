@@ -1,148 +1,152 @@
 # Rewards Program API
 
-A Spring Boot REST API for calculating customer reward points based on transaction history. Customers earn points based on their purchase amounts: 2 points for every dollar spent over $100, and 1 point for every dollar spent between $50-$100 per transaction.
+A Spring Boot REST API for calculating customer reward points based on transaction history. Customers earn points based on their purchase amounts: 2 points for every dollar spent over $100, and 1 point for every dollar spent between $50–$100 per transaction.
 
 ## Project Overview
 
-This application implements a rewards calculation system for a retailer's loyalty program. It processes transaction data and calculates total reward points earned by customers over a specified period (default: last 90 days).
+This application implements a rewards calculation system for a retailer's loyalty program. It processes transaction data and calculates total reward points earned by customers over a specified period.
 
 **Key Features:**
-- RESTful API endpoint to query customer rewards
-- Dynamic date range support for flexible querying
-- Comprehensive transaction and monthly reward breakdown
+- Two REST endpoints: per-customer with optional date range, and all-customers for the last 3 months
+- Thin controller — only mappings and exception handlers; all business logic in the service layer
+- Dedicated `PointsCalculationService` for pure points calculation, independently testable
+- Comprehensive monthly reward breakdown per customer
 - Robust error handling and input validation
-- Complete test coverage with 34 test cases
+- Complete test coverage
 - Detailed logging for troubleshooting
 
-## Design Details
+## Reward Calculation Logic
 
-### Reward Calculation Logic
+| Purchase Amount | Points Earned |
+|----------------|--------------|
+| Below $50 | 0 points |
+| $50 – $100 | 1 point per dollar over $50 |
+| Over $100 | 50 points (for $50–$100) + 2 points per dollar over $100 |
 
-The reward points calculation follows this formula:
-- Amount < $50: 0 points
-- Amount $50-$100: 1 point per dollar
-- Amount > $100: 50 points (for $50-$100 range) + 2 points per dollar (for amount over $100)
+**Examples:**
+- $45 → 0 points
+- $75 → 25 points (1 × $25)
+- $120 → 90 points (50 + 2 × $20)
+- $200 → 250 points (50 + 2 × $100)
 
-**Example:**
-- $45 purchase = 0 points
-- $75 purchase = 25 points (1 × $25)
-- $120 purchase = 90 points (50 + 40)
-- $200 purchase = 250 points (50 + 200)
-
-### System Architecture
+## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│      REST Controller                    │
-│   (RewardsController)                   │
-└──────────────┬──────────────────────────┘
-               │
-               ├─────────────────────┬──────────────────────┐
-               │                     │                      │
-        ┌──────▼────┐        ┌──────▼───────┐    ┌──────────▼────┐
-        │Calculation│        │Data Service  │    │Customer Svc   │
-        │Service    │        │(Async Data)  │    │(Customer Data)│
-        └───────────┘        └──────────────┘    └───────────────┘
-               │
-        ┌──────▼──────────┐
-        │ Models/DTOs    │
-        │ - Transaction  │
-        │ - Customer     │
-        │ - MonthlyRewards
-        │ - RewardsResponse
-        └───────────────┘
+┌──────────────────────────────────────┐
+│           RewardsController          │
+│  (mappings + exception handlers only)│
+└────────────────┬─────────────────────┘
+                 │
+       ┌─────────▼──────────┐
+       │ RewardCalculation  │
+       │     Service        │
+       └──┬──────────┬──────┘
+          │          │
+  ┌───────▼───┐  ┌───▼──────────────┐
+  │  Points   │  │  DataService     │
+  │Calculation│  │  CustomerService │
+  │  Service  │  └──────────────────┘
+  └───────────┘
+          │
+  ┌───────▼──────────────────┐
+  │  Models                  │
+  │  - Transaction           │
+  │  - Customer              │
+  │  - RewardsResponse       │
+  │    └─ MonthlyRewards     │
+  └──────────────────────────┘
 ```
 
-### Key Components
+### Components
 
-**RewardsController**: Handles HTTP requests and validates inputs
-- Validates customer ID and date range
-- Enforces business logic constraints (dates cannot be in future)
-- Returns comprehensive reward information
+**RewardsController** — HTTP layer only
+- Routes `GET /api/rewards/{customerId}` and `GET /api/v1/rewards/calculate`
+- No business logic; delegates everything to `RewardCalculationService`
+- Handles `CustomerNotFoundException` (404), `InvalidInputException` (400), and generic errors (500)
 
-**RewardCalculationService**: Core business logic
-- Calculates points for individual transactions
-- Groups transactions by month
-- Aggregates monthly and total rewards
-- Validates date ranges
+**RewardCalculationService** — orchestration
+- `calculateRewards(customerId, startDate, endDate)` — parses string dates, applies defaults, validates, then delegates to core method
+- `calculateRewardsForAllCustomers()` — computes last-3-months range and maps over all customers
+- `calculateRewardsForCustomer(customerId, startDate, endDate)` — core: fetch, filter, aggregate, build response
 
-**DataService**: Data access and async operations
-- Provides mock transaction data
-- Supports asynchronous data retrieval
-- Contains sample data for 3 customers across 3 months
+**PointsCalculationService** — pure calculation
+- Single responsibility: `calculatePoints(BigDecimal amount) → long`
+- No dependencies; injected into `RewardCalculationService`
 
-**CustomerService**: Customer lookup
-- Manages customer master data
-- Provides customer information by ID
+**DataService** — mock transaction store
+- In-memory list of 18 transactions across 3 customers (Jan–Mar 2026)
+- Each transaction has a unique sequential ID (1–18)
+- Supports both synchronous and asynchronous retrieval
+
+**CustomerService** — customer lookup
+- In-memory store of 3 customers
+- `getCustomer(id)` and `getAllCustomers()`
+
+### Model Classes
+
+| Class | Description |
+|-------|-------------|
+| `Transaction` | `id`, `customerId`, `amount`, `transactionDate` |
+| `Customer` | `id`, `name`, `email` |
+| `RewardsResponse` | Full response DTO including `MonthlyRewards` as a static inner class |
+| `RewardsResponse.MonthlyRewards` | `month`, `transactionCount`, `totalSpent`, `rewardsEarned` |
 
 ## Technical Stack
 
-- **Framework**: Spring Boot 4.0.5
-- **Java Version**: Java 8
-- **Build Tool**: Maven
-- **Testing**: JUnit 5 (Jupiter), Spring Boot Test, MockMvc
-- **Logging**: SLF4J with Logback
-- **JSON Processing**: Jackson (comes with Spring)
+| | |
+|--|--|
+| Framework | Spring Boot 4.0.5 |
+| Java | 8 |
+| Build | Maven |
+| Testing | JUnit 5, Spring Boot Test, MockMvc |
+| Logging | SLF4J + Logback |
+| JSON | Jackson (via Spring Boot) |
 
-## API Documentation
+## API Reference
 
-### Base URL
-```
-http://localhost:8080/api/rewards
-```
+**Base URL:** `http://localhost:8082`
 
-### Endpoints
+---
 
-#### Get Customer Rewards
-```
-GET /api/rewards/{customerId}
-```
+### GET /api/rewards/{customerId}
 
-**Path Parameters:**
-- `customerId` (required): Customer identifier (e.g., CUST001)
+Returns reward points for a single customer over an optional date range.
 
-**Query Parameters:**
-- `startDate` (optional): Start date in YYYY-MM-DD format. Defaults to 90 days ago.
-- `endDate` (optional): End date in YYYY-MM-DD format. Defaults to today.
+**Path Parameters**
 
-**Response:** RewardsResponse containing:
-- `customerId`: The queried customer ID
-- `customerName`: Customer's full name
-- `email`: Customer's email address
-- `queryStartDate`: Start date used for calculation
-- `queryEndDate`: End date used for calculation
-- `transactionCount`: Total number of transactions in date range
-- `totalPurchaseAmount`: Sum of all transaction amounts
-- `totalRewardsPoints`: Total reward points earned
-- `monthlyRewards`: Array of monthly breakdown:
-  - `month`: Year-Month (e.g., "2026-01")
-  - `transactionCount`: Transactions in that month
-  - `totalSpent`: Amount spent in that month
-  - `rewardsEarned`: Points earned in that month
-- `transactions`: Array of individual transactions with details
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `customerId` | Long | Yes | Customer identifier (1, 2, or 3) |
 
-### Request Examples
+**Query Parameters**
 
-**Request 1: Query with explicit date range**
-```bash
-curl -X GET "http://localhost:8080/api/rewards/CUST001?startDate=2026-01-01&endDate=2026-03-31"
-```
+| Parameter | Format | Required | Default |
+|-----------|--------|----------|---------|
+| `startDate` | YYYY-MM-DD | No | 90 days ago |
+| `endDate` | YYYY-MM-DD | No | Today |
 
-**Request 2: Default date range (last 90 days)**
-```bash
-curl -X GET "http://localhost:8080/api/rewards/CUST002"
-```
+**Validation rules:**
+- `startDate` must not be after `endDate`
+- `endDate` must not be in the future
 
-**Request 3: Single month query**
-```bash
-curl -X GET "http://localhost:8080/api/rewards/CUST003?startDate=2026-02-01&endDate=2026-02-28"
-```
+---
 
-### Response Example
+### GET /api/v1/rewards/calculate
+
+Returns reward points for **all customers** over the last 3 calendar months. No input required.
+
+**Date range:** First day of the month 3 months ago → today.  
+Example (run on 2026-04-21): `2026-01-01` → `2026-04-21`
+
+---
+
+### Response Structure
+
+Both endpoints return the same `RewardsResponse` shape (the calculate endpoint returns an array of them).
 
 ```json
 {
-  "customerId": "CUST001",
+  "customerId": 1,
   "customerName": "John Doe",
   "email": "john.doe@example.com",
   "queryStartDate": "2026-01-01",
@@ -172,8 +176,8 @@ curl -X GET "http://localhost:8080/api/rewards/CUST003?startDate=2026-02-01&endD
   ],
   "transactions": [
     {
-      "id": "T00001",
-      "customerId": "CUST001",
+      "id": 1,
+      "customerId": 1,
       "amount": 120.00,
       "transactionDate": "2026-01-10"
     }
@@ -183,16 +187,16 @@ curl -X GET "http://localhost:8080/api/rewards/CUST003?startDate=2026-02-01&endD
 
 ### Error Responses
 
-**404 - Customer Not Found**
+**404 — Customer Not Found**
 ```json
 {
   "errorCode": "CUSTOMER_NOT_FOUND",
-  "message": "Customer not found: INVALID_ID",
+  "message": "Customer not found: 999",
   "statusCode": 404
 }
 ```
 
-**400 - Invalid Input**
+**400 — Invalid Input**
 ```json
 {
   "errorCode": "INVALID_INPUT",
@@ -201,7 +205,7 @@ curl -X GET "http://localhost:8080/api/rewards/CUST003?startDate=2026-02-01&endD
 }
 ```
 
-**500 - Internal Server Error**
+**500 — Internal Server Error**
 ```json
 {
   "errorCode": "INTERNAL_ERROR",
@@ -210,135 +214,72 @@ curl -X GET "http://localhost:8080/api/rewards/CUST003?startDate=2026-02-01&endD
 }
 ```
 
-## Error Codes
+### curl Examples
 
-| Code | HTTP Status | Meaning |
-|------|-------------|---------|
-| CUSTOMER_NOT_FOUND | 404 | Requested customer ID does not exist |
-| INVALID_INPUT | 400 | Input validation failed (invalid dates, etc.) |
-| INTERNAL_ERROR | 500 | Unexpected server error |
-
-## How to Build and Run
-
-### Prerequisites
-- Java 8 or higher
-- Maven 3.6+
-
-### Build
 ```bash
+# Single customer with explicit date range
+curl "http://localhost:8082/api/rewards/1?startDate=2026-01-01&endDate=2026-03-31"
+
+# Single customer, default date range (last 90 days)
+curl "http://localhost:8082/api/rewards/2"
+
+# All customers, last 3 months (no input required)
+curl "http://localhost:8082/api/v1/rewards/calculate"
+```
+
+## Build and Run
+
+**Prerequisites:** Java 8+, Maven 3.6+
+
+```bash
+# Build
 mvn clean install
-```
 
-### Run Application
-```bash
+# Run
 mvn spring-boot:run
-```
 
-The application will start on `http://localhost:8080`
-
-### Alternative: Direct JAR Execution
-```bash
+# Or run the JAR directly
 mvn clean package
 java -jar target/assignments-0.0.1-SNAPSHOT.jar
 ```
 
+The application starts on `http://localhost:8082`.
+
 ## Testing
 
-### Run All Tests
 ```bash
+# All tests
 mvn test
-```
 
-### Run Specific Test Class
-```bash
-mvn test -Dtest=RewardCalculationServiceTest
+# Specific test class
 mvn test -Dtest=RewardsControllerTest
+mvn test -Dtest=RewardCalculationServiceTest
 mvn test -Dtest=DataServiceTest
-```
-
-### Test Results
-```
-Tests run: 34, Failures: 0, Errors: 0, Skipped: 0
 ```
 
 ### Test Coverage
 
-**RewardCalculationServiceTest (16 tests)**
-- Point calculation for various transaction amounts
-- Edge cases ($50.00, $100.00, $100.01)
-- Zero and null amounts
-- Customer lookup and not found scenario
-- Date range validation
-- Monthly grouping and aggregation
-- Empty transaction scenarios
+**RewardsControllerTest** — integration tests via MockMvc
+- Valid requests with and without date parameters
+- Invalid customer ID → 404
+- Invalid date format → 400
+- Start date after end date → 400
+- Future end date → 400
+- Response structure and monthly breakdown
 
-**RewardsControllerTest (11 tests)**
-- Valid requests with date ranges
-- Default date range handling
-- Invalid customer ID (404)
-- Invalid date formats (500)
-- Invalid date ranges (400)
-- Future date rejection (400)
-- Response structure validation
-- Multiple customer queries
-- Transaction and monthly detail inclusion
+**RewardCalculationServiceTest** — service unit tests
+- Points calculation for amounts below $50, between $50–$100, and above $100
+- Edge cases: exactly $50, exactly $100, zero, null
+- Customer not found → `CustomerNotFoundException`
+- Invalid date range → `InvalidInputException`
+- Null dates apply defaults correctly
+- Monthly totals sum to overall total
 
-**DataServiceTest (7 tests)**
-- Transaction retrieval by customer
-- Multiple customer queries
-- Non-existent customer handling
-- All transactions retrieval
-- Asynchronous data retrieval
-- Data integrity validation
-
-## Sample Data
-
-The application includes mock transaction data for 3 customers:
-
-**Customer 1 (CUST001) - John Doe**
-- 7 transactions across 3 months
-- Total: $705.75, Rewards: 530 points
-
-**Customer 2 (CUST002) - Jane Smith**
-- 6 transactions across 3 months
-- Transactions from 2026-01-05 to 2026-03-25
-
-**Customer 3 (CUST003) - Bob Johnson**
-- 5 transactions across 3 months
-- Transactions from 2026-01-12 to 2026-03-12
-
-## Code Quality Standards
-
-✓ **Naming Convention**: Standardized camelCase for variables/methods, PascalCase for classes
-✓ **Clean Code**: No console logs, removed in favor of SLF4J logging
-✓ **Distinct Names**: Avoid variable name clashes between scopes
-✓ **Proper Formatting**: Consistent indentation and code style
-✓ **Documentation**: Javadoc comments on key methods
-✓ **Input Validation**: All user inputs validated (customer ID, dates)
-✓ **Exception Handling**: Custom exceptions with meaningful error messages
-✓ **Logging**: DEBUG, INFO, WARN, and ERROR level logging throughout
-✓ **Test Coverage**: Comprehensive test cases for multiple scenarios
-
-## Exception Handling & Logging
-
-### Logging Levels
-- **DEBUG**: Detailed data retrieval operations
-- **INFO**: Request processing and reward calculations
-- **WARN**: Validation failures and edge cases
-- **ERROR**: Exception details and stack traces
-
-### Custom Exceptions
-- `CustomerNotFoundException`: Thrown when customer ID not found
-- `InvalidInputException`: Thrown for validation failures
-
-Sample log output:
-```
-2026-04-15 00:17:46 [main] INFO  RewardsController - Received request for CUST001
-2026-04-15 00:17:46 [main] INFO  RewardCalculationService - Calculating rewards from 2026-01-01 to 2026-03-31
-2026-04-15 00:17:46 [main] DEBUG DataService - Fetching transactions for customer: CUST001
-2026-04-15 00:17:46 [main] INFO  RewardCalculationService - Found 7 transactions
-2026-04-15 00:17:46 [main] INFO  RewardCalculationService - Reward calculation complete. Total points: 530
-```
+**DataServiceTest** — data layer tests
+- Transaction retrieval by customer ID
+- Non-existent customer returns empty list
+- All-transactions retrieval
+- Async retrieval
 
 ## Project Structure
 
@@ -351,16 +292,16 @@ src/
 │   │   │   └── RewardsController.java
 │   │   ├── service/
 │   │   │   ├── RewardCalculationService.java
+│   │   │   ├── PointsCalculationService.java
 │   │   │   ├── DataService.java
 │   │   │   └── CustomerService.java
 │   │   ├── model/
 │   │   │   ├── Transaction.java
 │   │   │   ├── Customer.java
-│   │   │   ├── MonthlyRewards.java
-│   │   │   └── RewardsResponse.java
+│   │   │   └── RewardsResponse.java   (includes MonthlyRewards as inner class)
 │   │   └── exception/
-│   │       ├── InvalidInputException.java
-│   │       └── CustomerNotFoundException.java
+│   │       ├── CustomerNotFoundException.java
+│   │       └── InvalidInputException.java
 │   └── resources/
 │       └── application.properties
 └── test/
@@ -373,52 +314,30 @@ src/
         └── AssignmentsApplicationTests.java
 ```
 
-## SCM Practices
+## Sample Data
 
-This project follows proper Git practices:
-- Meaningful commit messages describing changes
-- Separate commits for logical features
-- Clean commit history
+18 mock transactions pre-loaded across 3 customers (IDs: 1, 2, 3), covering Jan–Mar 2026. All transactions have unique sequential IDs (1–18).
 
-## Future Enhancements
-
-Potential improvements for future iterations:
-- Database persistence (H2/PostgreSQL)
-- JPA entities and repositories
-- Transaction storage in database
-- Customer master data management
-- caching mechanisms for performance
-- Batch processing for large datasets
-- Additional query filters (transaction type, category)
-- Excel/CSV export functionality
-- Web UI for customer self-service
+| Customer | Name | Transactions |
+|----------|------|-------------|
+| 1 | John Doe | 7 (Jan–Mar 2026) |
+| 2 | Jane Smith | 6 (Jan–Mar 2026) |
+| 3 | Bob Johnson | 5 (Jan–Mar 2026) |
 
 ## Troubleshooting
 
-### Application fails to start
-- Verify Java 8+ is installed: `java -version`
-- Check if port 8080 is available
-- Review logs in console for explicit error messages
+**Application won't start**
+- Check Java version: `java -version` (requires 8+)
+- Ensure port 8082 is free
 
-### Tests failing
-- Ensure all source files are properly compiled: `mvn clean compile`
-- Run `mvn test` to see detailed test output
-- Check log files for asynchronous test timing issues
+**API returns 404**
+- Valid customer IDs are `1`, `2`, and `3`
 
-### API returning errors
-- Verify customer ID exists (CUST001, CUST002, CUST003)
-- Ensure date format is YYYY-MM-DD
-- Check that startDate is not after endDate
-- Confirm endDate is not in the future
-
-## Support and Maintenance
-
-For issues or enhancements, refer to the test cases for expected behavior.
-All business logic is covered by comprehensive unit and integration tests.
+**API returns 400**
+- Date format must be `YYYY-MM-DD`
+- `startDate` must not be after `endDate`
+- `endDate` must not be in the future
 
 ---
 
-**Version**: 0.0.1-SNAPSHOT
-**Last Updated**: 2026-04-15
-**Java Version**: 8
-**Spring Boot Version**: 4.0.5
+**Version:** 0.0.1-SNAPSHOT | **Java:** 8 | **Spring Boot:** 4.0.5 | **Last Updated:** 2026-04-21

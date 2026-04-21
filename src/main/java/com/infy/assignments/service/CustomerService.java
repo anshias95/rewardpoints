@@ -1,5 +1,7 @@
 package com.infy.assignments.service;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 import com.infy.assignments.model.Customer;
@@ -20,5 +22,9 @@ public class CustomerService {
 			}
 		}
 		return Optional.empty();
+	}
+
+	public List<Customer> getAllCustomers() {
+		return Arrays.asList(CUSTOMERS);
 	}
 }

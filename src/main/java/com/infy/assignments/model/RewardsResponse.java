@@ -2,6 +2,7 @@ package com.infy.assignments.model;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 
 public class RewardsResponse {
@@ -36,99 +37,78 @@ public class RewardsResponse {
 		this.transactions = transactions;
 	}
 
-	public Long getCustomerId() {
-		return customerId;
-	}
+	public Long getCustomerId() { return customerId; }
+	public void setCustomerId(Long customerId) { this.customerId = customerId; }
 
-	public void setCustomerId(Long customerId) {
-		this.customerId = customerId;
-	}
+	public String getCustomerName() { return customerName; }
+	public void setCustomerName(String customerName) { this.customerName = customerName; }
 
-	public String getCustomerName() {
-		return customerName;
-	}
+	public String getEmail() { return email; }
+	public void setEmail(String email) { this.email = email; }
 
-	public void setCustomerName(String customerName) {
-		this.customerName = customerName;
-	}
+	public LocalDate getQueryStartDate() { return queryStartDate; }
+	public void setQueryStartDate(LocalDate queryStartDate) { this.queryStartDate = queryStartDate; }
 
-	public String getEmail() {
-		return email;
-	}
+	public LocalDate getQueryEndDate() { return queryEndDate; }
+	public void setQueryEndDate(LocalDate queryEndDate) { this.queryEndDate = queryEndDate; }
 
-	public void setEmail(String email) {
-		this.email = email;
-	}
+	public int getTransactionCount() { return transactionCount; }
+	public void setTransactionCount(int transactionCount) { this.transactionCount = transactionCount; }
 
-	public LocalDate getQueryStartDate() {
-		return queryStartDate;
-	}
+	public BigDecimal getTotalPurchaseAmount() { return totalPurchaseAmount; }
+	public void setTotalPurchaseAmount(BigDecimal totalPurchaseAmount) { this.totalPurchaseAmount = totalPurchaseAmount; }
 
-	public void setQueryStartDate(LocalDate queryStartDate) {
-		this.queryStartDate = queryStartDate;
-	}
+	public long getTotalRewardsPoints() { return totalRewardsPoints; }
+	public void setTotalRewardsPoints(long totalRewardsPoints) { this.totalRewardsPoints = totalRewardsPoints; }
 
-	public LocalDate getQueryEndDate() {
-		return queryEndDate;
-	}
+	public List<MonthlyRewards> getMonthlyRewards() { return monthlyRewards; }
+	public void setMonthlyRewards(List<MonthlyRewards> monthlyRewards) { this.monthlyRewards = monthlyRewards; }
 
-	public void setQueryEndDate(LocalDate queryEndDate) {
-		this.queryEndDate = queryEndDate;
-	}
-
-	public int getTransactionCount() {
-		return transactionCount;
-	}
-
-	public void setTransactionCount(int transactionCount) {
-		this.transactionCount = transactionCount;
-	}
-
-	public BigDecimal getTotalPurchaseAmount() {
-		return totalPurchaseAmount;
-	}
-
-	public void setTotalPurchaseAmount(BigDecimal totalPurchaseAmount) {
-		this.totalPurchaseAmount = totalPurchaseAmount;
-	}
-
-	public long getTotalRewardsPoints() {
-		return totalRewardsPoints;
-	}
-
-	public void setTotalRewardsPoints(long totalRewardsPoints) {
-		this.totalRewardsPoints = totalRewardsPoints;
-	}
-
-	public List<MonthlyRewards> getMonthlyRewards() {
-		return monthlyRewards;
-	}
-
-	public void setMonthlyRewards(List<MonthlyRewards> monthlyRewards) {
-		this.monthlyRewards = monthlyRewards;
-	}
-
-	public List<Transaction> getTransactions() {
-		return transactions;
-	}
-
-	public void setTransactions(List<Transaction> transactions) {
-		this.transactions = transactions;
-	}
+	public List<Transaction> getTransactions() { return transactions; }
+	public void setTransactions(List<Transaction> transactions) { this.transactions = transactions; }
 
 	@Override
 	public String toString() {
-		return "RewardsResponse{" +
-				"customerId='" + customerId + '\'' +
-				", customerName='" + customerName + '\'' +
-				", email='" + email + '\'' +
-				", queryStartDate=" + queryStartDate +
-				", queryEndDate=" + queryEndDate +
-				", transactionCount=" + transactionCount +
-				", totalPurchaseAmount=" + totalPurchaseAmount +
-				", totalRewardsPoints=" + totalRewardsPoints +
-				", monthlyRewards=" + monthlyRewards +
-				", transactions=" + transactions +
-				'}';
+		return "RewardsResponse{customerId=" + customerId + ", customerName='" + customerName + '\''
+				+ ", email='" + email + '\'' + ", queryStartDate=" + queryStartDate
+				+ ", queryEndDate=" + queryEndDate + ", transactionCount=" + transactionCount
+				+ ", totalPurchaseAmount=" + totalPurchaseAmount + ", totalRewardsPoints=" + totalRewardsPoints
+				+ ", monthlyRewards=" + monthlyRewards + ", transactions=" + transactions + '}';
+	}
+
+	public static class MonthlyRewards {
+
+		private YearMonth month;
+		private int transactionCount;
+		private BigDecimal totalSpent;
+		private long rewardsEarned;
+
+		public MonthlyRewards() {
+		}
+
+		public MonthlyRewards(YearMonth month, int transactionCount, BigDecimal totalSpent, long rewardsEarned) {
+			this.month = month;
+			this.transactionCount = transactionCount;
+			this.totalSpent = totalSpent;
+			this.rewardsEarned = rewardsEarned;
+		}
+
+		public YearMonth getMonth() { return month; }
+		public void setMonth(YearMonth month) { this.month = month; }
+
+		public int getTransactionCount() { return transactionCount; }
+		public void setTransactionCount(int transactionCount) { this.transactionCount = transactionCount; }
+
+		public BigDecimal getTotalSpent() { return totalSpent; }
+		public void setTotalSpent(BigDecimal totalSpent) { this.totalSpent = totalSpent; }
+
+		public long getRewardsEarned() { return rewardsEarned; }
+		public void setRewardsEarned(long rewardsEarned) { this.rewardsEarned = rewardsEarned; }
+
+		@Override
+		public String toString() {
+			return "MonthlyRewards{month=" + month + ", transactionCount=" + transactionCount
+					+ ", totalSpent=" + totalSpent + ", rewardsEarned=" + rewardsEarned + '}';
+		}
 	}
 }
