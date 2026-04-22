@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.infy.assignments.exception.CustomerNotFoundException;
 import com.infy.assignments.exception.InvalidInputException;
+import com.infy.assignments.model.ErrorResponse;
 import com.infy.assignments.model.RewardsResponse;
 import com.infy.assignments.service.RewardCalculationService;
 
@@ -69,21 +70,5 @@ public class RewardsController {
 		logger.error("Unexpected error", ex);
 		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
 				.body(new ErrorResponse("INTERNAL_ERROR", "An unexpected error occurred", 500));
-	}
-
-	public static class ErrorResponse {
-		public String errorCode;
-		public String message;
-		public int statusCode;
-
-		public ErrorResponse(String errorCode, String message, int statusCode) {
-			this.errorCode = errorCode;
-			this.message = message;
-			this.statusCode = statusCode;
-		}
-
-		public String getErrorCode() { return errorCode; }
-		public String getMessage() { return message; }
-		public int getStatusCode() { return statusCode; }
 	}
 }
