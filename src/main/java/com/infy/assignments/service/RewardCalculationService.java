@@ -35,66 +35,55 @@ public class RewardCalculationService {
 		this.pointsCalculationService = pointsCalculationService;
 	}
 
-	/** Entry point for the single-customer endpoint — accepts raw string params from the controller. */
-	public RewardsResponse calculateRewards(Long customerId, String startDateStr, String endDateStr) {
-		LocalDate startDate = parseDateOrDefault(startDateStr, LocalDate.now().minusDays(90));
-		LocalDate endDate = parseDateOrDefault(endDateStr, LocalDate.now());
-		validateDateRange(startDate, endDate);
-		return calculateRewardsForCustomer(customerId, startDate, endDate);
-	}
+	/**
+	 * Calculates rewards for all customers.
+	 * Rules: both dates absent → default last 3 months; both present → use as-is;
+	 * exactly one present → InvalidInputException.
+	 */
+	public List<RewardsResponse> calculateRewardsForAllCustomers(String startDateStr, String endDateStr) {
+		boolean hasStart = startDateStr != null && !startDateStr.trim().isEmpty();
+		boolean hasEnd = endDateStr != null && !endDateStr.trim().isEmpty();
 
-	/** Entry point for the all-customers endpoint — date range is fixed to the last 3 months. */
-	public List<RewardsResponse> calculateRewardsForAllCustomers() {
-		LocalDate endDate = LocalDate.now();
-		LocalDate startDate = endDate.minusMonths(3).withDayOfMonth(1);
+		final LocalDate startDate;
+		final LocalDate endDate;
+
+		if (!hasStart && !hasEnd) {
+			endDate = LocalDate.now();
+			startDate = endDate.minusMonths(3).withDayOfMonth(1);
+		} else if (hasStart && hasEnd) {
+			startDate = parseDate(startDateStr);
+			endDate = parseDate(endDateStr);
+			validateDateRange(startDate, endDate);
+		} else {
+			throw new InvalidInputException(
+					"Both startDate and endDate must be provided together, or neither.");
+		}
+
 		logger.info("Calculating rewards for all customers from {} to {}", startDate, endDate);
 		return customerService.getAllCustomers().stream()
 				.map(customer -> calculateRewardsForCustomer(customer.getId(), startDate, endDate))
 				.collect(Collectors.toList());
 	}
 
-	/** Core calculation — accepts resolved LocalDate params (nullable; null means apply defaults). */
-	public RewardsResponse calculateRewardsForCustomer(Long customerId, LocalDate startDate, LocalDate endDate) {
-		if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
-			throw new InvalidInputException("Start date cannot be after end date");
-		}
-
-		LocalDate resolvedStart = startDate != null ? startDate : LocalDate.now().minusDays(90);
-		LocalDate resolvedEnd = endDate != null ? endDate : LocalDate.now();
-
+	private RewardsResponse calculateRewardsForCustomer(Long customerId, LocalDate startDate, LocalDate endDate) {
 		Customer customer = customerService.getCustomer(customerId)
 				.orElseThrow(() -> new CustomerNotFoundException("Customer not found: " + customerId));
 
 		List<Transaction> filtered = dataService.getTransactionsByCustomerId(customerId).stream()
-				.filter(txn -> !txn.getTransactionDate().isBefore(resolvedStart)
-						&& !txn.getTransactionDate().isAfter(resolvedEnd))
+				.filter(txn -> !txn.getTransactionDate().isBefore(startDate)
+						&& !txn.getTransactionDate().isAfter(endDate))
 				.collect(Collectors.toList());
 
-		List<MonthlyRewards> monthlyRewards = buildMonthlyRewards(filtered);
-		long totalPoints = monthlyRewards.stream().mapToLong(MonthlyRewards::getRewardsEarned).sum();
-		BigDecimal totalSpent = monthlyRewards.stream()
-				.map(MonthlyRewards::getTotalSpent)
+		List<MonthlyRewards> monthlyBreakdown = buildMonthlyRewards(filtered);
+		long totalPoints = monthlyBreakdown.stream().mapToLong(MonthlyRewards::getRewardsEarned).sum();
+		BigDecimal totalSpent = filtered.stream()
+				.map(Transaction::getAmount)
 				.reduce(BigDecimal.ZERO, BigDecimal::add);
 
 		logger.info("Customer {}: {} transactions, {} points", customerId, filtered.size(), totalPoints);
 
-		RewardsResponse response = new RewardsResponse();
-		response.setCustomerId(customerId);
-		response.setCustomerName(customer.getName());
-		response.setEmail(customer.getEmail());
-		response.setQueryStartDate(resolvedStart);
-		response.setQueryEndDate(resolvedEnd);
-		response.setTransactionCount(filtered.size());
-		response.setTransactions(filtered);
-		response.setMonthlyRewards(monthlyRewards);
-		response.setTotalRewardsPoints(totalPoints);
-		response.setTotalPurchaseAmount(totalSpent);
-		return response;
-	}
-
-	/** Delegates to PointsCalculationService; kept public for existing tests. */
-	public long calculatePointsForTransaction(BigDecimal amount) {
-		return pointsCalculationService.calculatePoints(amount);
+		return new RewardsResponse(customerId, customer.getName(), customer.getEmail(),
+				startDate, endDate, filtered.size(), totalSpent, totalPoints, monthlyBreakdown, filtered);
 	}
 
 	private List<MonthlyRewards> buildMonthlyRewards(List<Transaction> transactions) {
@@ -124,14 +113,12 @@ public class RewardCalculationService {
 		}
 	}
 
-	private LocalDate parseDateOrDefault(String dateStr, LocalDate defaultValue) {
-		if (dateStr == null || dateStr.trim().isEmpty()) {
-			return defaultValue;
-		}
+	private LocalDate parseDate(String dateStr) {
 		try {
 			return LocalDate.parse(dateStr.trim());
 		} catch (DateTimeParseException e) {
-			throw new InvalidInputException("Invalid date format: '" + dateStr.trim() + "'. Expected YYYY-MM-DD");
+			throw new InvalidInputException(
+					"Invalid date format: '" + dateStr.trim() + "'. Expected YYYY-MM-DD");
 		}
 	}
 }

@@ -3,174 +3,203 @@ package com.infy.assignments.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.when;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import com.infy.assignments.exception.CustomerNotFoundException;
-import com.infy.assignments.exception.InvalidInputException;
-import com.infy.assignments.model.RewardsResponse;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-@SpringBootTest
+import com.infy.assignments.exception.InvalidInputException;
+import com.infy.assignments.model.Customer;
+import com.infy.assignments.model.RewardsResponse;
+import com.infy.assignments.model.Transaction;
+
+@ExtendWith(MockitoExtension.class)
 class RewardCalculationServiceTest {
 
-	@Autowired
-	private RewardCalculationService rewardCalculationService;
+	@Mock
+	private DataService dataService;
+
+	@Mock
+	private CustomerService customerService;
+
+	private RewardCalculationService service;
+
+	private final Customer customer1 = new Customer(1L, "John Doe", "john@example.com");
+	private final Customer customer2 = new Customer(2L, "Jane Smith", "jane@example.com");
 
 	@BeforeEach
 	void setUp() {
-		assertNotNull(rewardCalculationService);
+		service = new RewardCalculationService(dataService, customerService, new PointsCalculationService());
+	}
+
+	// --- Date validation ---
+
+	@Test
+	void calculateRewards_withNoDates_usesDefaultLastThreeMonths() {
+		when(customerService.getAllCustomers()).thenReturn(Collections.singletonList(customer1));
+		when(customerService.getCustomer(1L)).thenReturn(Optional.of(customer1));
+		when(dataService.getTransactionsByCustomerId(1L)).thenReturn(Collections.emptyList());
+
+		List<RewardsResponse> result = service.calculateRewardsForAllCustomers(null, null);
+
+		assertNotNull(result);
+		assertEquals(1, result.size());
+		// Default end date is today; start date is first day of month 3 months ago
+		LocalDate expectedEnd = LocalDate.now();
+		LocalDate expectedStart = expectedEnd.minusMonths(3).withDayOfMonth(1);
+		assertEquals(expectedStart, result.get(0).getQueryStartDate());
+		assertEquals(expectedEnd, result.get(0).getQueryEndDate());
 	}
 
 	@Test
-	void testCalculatePointsForAmountLessThanFifty() {
-		long points = rewardCalculationService.calculatePointsForTransaction(new BigDecimal("45.00"));
-		assertEquals(0, points, "Amount less than $50 should earn 0 points");
+	void calculateRewards_withEmptyStringDates_usesDefaultLastThreeMonths() {
+		when(customerService.getAllCustomers()).thenReturn(Collections.singletonList(customer1));
+		when(customerService.getCustomer(1L)).thenReturn(Optional.of(customer1));
+		when(dataService.getTransactionsByCustomerId(1L)).thenReturn(Collections.emptyList());
+
+		List<RewardsResponse> result = service.calculateRewardsForAllCustomers("", "");
+		assertNotNull(result);
+		assertEquals(1, result.size());
 	}
 
 	@Test
-	void testCalculatePointsForAmountBetweenFiftyAndSixty() {
-		long points = rewardCalculationService.calculatePointsForTransaction(new BigDecimal("60.00"));
-		assertEquals(10, points, "$60 should earn 1 point per dollar between $50-$100 = 10 points");
+	void calculateRewards_withOnlyStartDate_throwsInvalidInputException() {
+		assertThrows(InvalidInputException.class,
+				() -> service.calculateRewardsForAllCustomers("2026-01-01", null));
 	}
 
 	@Test
-	void testCalculatePointsForAmountEqualToFifty() {
-		long points = rewardCalculationService.calculatePointsForTransaction(new BigDecimal("50.00"));
-		assertEquals(0, points, "Amount exactly $50 should earn 0 points");
+	void calculateRewards_withOnlyEndDate_throwsInvalidInputException() {
+		assertThrows(InvalidInputException.class,
+				() -> service.calculateRewardsForAllCustomers(null, "2026-03-31"));
 	}
 
 	@Test
-	void testCalculatePointsForAmountBetweenFiftyAndOneHundred() {
-		long points = rewardCalculationService.calculatePointsForTransaction(new BigDecimal("75.00"));
-		assertEquals(25, points, "$75 should earn 1 point per dollar between $50-$100 = 25 points");
+	void calculateRewards_withStartDateAfterEndDate_throwsInvalidInputException() {
+		assertThrows(InvalidInputException.class,
+				() -> service.calculateRewardsForAllCustomers("2026-03-31", "2026-01-01"));
 	}
 
 	@Test
-	void testCalculatePointsForAmountEqualToOneHundred() {
-		long points = rewardCalculationService.calculatePointsForTransaction(new BigDecimal("100.00"));
-		assertEquals(50, points, "$100 should earn 1 point per dollar between $50-$100 = 50 points");
+	void calculateRewards_withFutureEndDate_throwsInvalidInputException() {
+		assertThrows(InvalidInputException.class,
+				() -> service.calculateRewardsForAllCustomers("2026-01-01", "2099-12-31"));
 	}
 
 	@Test
-	void testCalculatePointsForAmountOneHundredTwenty() {
-		long points = rewardCalculationService.calculatePointsForTransaction(new BigDecimal("120.00"));
-		// Between $50-$100: 50 points
-		// Over $100: $20 * 2 = 40 points
-		// Total: 90 points
-		assertEquals(90, points, "$120 should earn 50 + 40 = 90 points");
+	void calculateRewards_withInvalidDateFormat_throwsInvalidInputException() {
+		assertThrows(InvalidInputException.class,
+				() -> service.calculateRewardsForAllCustomers("01/01/2026", "2026-03-31"));
 	}
 
 	@Test
-	void testCalculatePointsForAmountOneHundredTen() {
-		long points = rewardCalculationService.calculatePointsForTransaction(new BigDecimal("110.00"));
-		// Between $50-$100: 50 points
-		// Over $100: $10 * 2 = 20 points
-		// Total: 70 points
-		assertEquals(70, points, "$110 should earn 50 + 20 = 70 points");
+	void calculateRewards_withSameDateForStartAndEnd_isValid() {
+		when(customerService.getAllCustomers()).thenReturn(Collections.singletonList(customer1));
+		when(customerService.getCustomer(1L)).thenReturn(Optional.of(customer1));
+		when(dataService.getTransactionsByCustomerId(1L)).thenReturn(Collections.emptyList());
+
+		List<RewardsResponse> result = service.calculateRewardsForAllCustomers("2026-01-10", "2026-01-10");
+		assertEquals(1, result.size());
+	}
+
+	// --- Points calculation with decimal amounts ---
+
+	@Test
+	void calculateRewards_withDecimalAmountOver100_roundsHalfUp() {
+		// $120.75: over-$100 portion = 20.75 * 2 = 41.5 → rounds to 42; $50–$100 = 50 → total 92
+		Transaction txn = new Transaction(1L, 1L, new BigDecimal("120.75"), LocalDate.of(2026, 1, 10));
+		when(customerService.getAllCustomers()).thenReturn(Collections.singletonList(customer1));
+		when(customerService.getCustomer(1L)).thenReturn(Optional.of(customer1));
+		when(dataService.getTransactionsByCustomerId(1L)).thenReturn(Collections.singletonList(txn));
+
+		List<RewardsResponse> result = service.calculateRewardsForAllCustomers("2026-01-01", "2026-01-31");
+		assertEquals(92L, result.get(0).getTotalRewardsPoints());
 	}
 
 	@Test
-	void testCalculatePointsForAmountTwoHundred() {
-		long points = rewardCalculationService.calculatePointsForTransaction(new BigDecimal("200.00"));
-		// Between $50-$100: 50 points
-		// Over $100: $100 * 2 = 200 points
-		// Total: 250 points
-		assertEquals(250, points, "$200 should earn 50 + 200 = 250 points");
+	void calculateRewards_withDecimalAmountBetween50And100_roundsHalfUp() {
+		// $75.50: $50–$100 portion = 25.50 → rounds to 26 points
+		Transaction txn = new Transaction(2L, 1L, new BigDecimal("75.50"), LocalDate.of(2026, 1, 20));
+		when(customerService.getAllCustomers()).thenReturn(Collections.singletonList(customer1));
+		when(customerService.getCustomer(1L)).thenReturn(Optional.of(customer1));
+		when(dataService.getTransactionsByCustomerId(1L)).thenReturn(Collections.singletonList(txn));
+
+		List<RewardsResponse> result = service.calculateRewardsForAllCustomers("2026-01-01", "2026-01-31");
+		assertEquals(26L, result.get(0).getTotalRewardsPoints());
+	}
+
+	// --- Business logic ---
+
+	@Test
+	void calculateRewards_transactionsOutsideDateRange_areExcluded() {
+		Transaction inside = new Transaction(1L, 1L, new BigDecimal("120.00"), LocalDate.of(2026, 2, 10));
+		Transaction outside = new Transaction(2L, 1L, new BigDecimal("200.00"), LocalDate.of(2026, 4, 1));
+		when(customerService.getAllCustomers()).thenReturn(Collections.singletonList(customer1));
+		when(customerService.getCustomer(1L)).thenReturn(Optional.of(customer1));
+		when(dataService.getTransactionsByCustomerId(1L)).thenReturn(Arrays.asList(inside, outside));
+
+		List<RewardsResponse> result = service.calculateRewardsForAllCustomers("2026-01-01", "2026-03-31");
+		assertEquals(1, result.get(0).getTransactionCount());
 	}
 
 	@Test
-	void testCalculatePointsForZeroAmount() {
-		long points = rewardCalculationService.calculatePointsForTransaction(new BigDecimal("0.00"));
-		assertEquals(0, points, "Zero amount should earn 0 points");
+	void calculateRewards_noTransactionsInRange_returnsZeroPoints() {
+		when(customerService.getAllCustomers()).thenReturn(Collections.singletonList(customer1));
+		when(customerService.getCustomer(1L)).thenReturn(Optional.of(customer1));
+		when(dataService.getTransactionsByCustomerId(1L)).thenReturn(Collections.emptyList());
+
+		List<RewardsResponse> result = service.calculateRewardsForAllCustomers("2026-01-01", "2026-03-31");
+		assertEquals(0, result.get(0).getTotalRewardsPoints());
+		assertEquals(0, result.get(0).getTransactionCount());
 	}
 
 	@Test
-	void testCalculatePointsForNullAmount() {
-		long points = rewardCalculationService.calculatePointsForTransaction(null);
-		assertEquals(0, points, "Null amount should earn 0 points");
-	}
+	void calculateRewards_monthlyBreakdownSumsToTotal() {
+		Transaction t1 = new Transaction(1L, 1L, new BigDecimal("120.00"), LocalDate.of(2026, 1, 10));
+		Transaction t2 = new Transaction(2L, 1L, new BigDecimal("200.00"), LocalDate.of(2026, 2, 5));
+		when(customerService.getAllCustomers()).thenReturn(Collections.singletonList(customer1));
+		when(customerService.getCustomer(1L)).thenReturn(Optional.of(customer1));
+		when(dataService.getTransactionsByCustomerId(1L)).thenReturn(Arrays.asList(t1, t2));
 
-	@Test
-	void testCalculateRewardsForExistingCustomer() {
-		LocalDate startDate = LocalDate.of(2026, 1, 1);
-		LocalDate endDate = LocalDate.of(2026, 3, 31);
+		List<RewardsResponse> result = service.calculateRewardsForAllCustomers("2026-01-01", "2026-03-31");
+		RewardsResponse response = result.get(0);
 
-		RewardsResponse response = rewardCalculationService.calculateRewardsForCustomer(
-				1L, startDate, endDate);
-
-		assertNotNull(response);
-		assertEquals(1L, response.getCustomerId());
-		assertEquals("John Doe", response.getCustomerName());
-		assertEquals("john.doe@example.com", response.getEmail());
-		assertEquals(startDate, response.getQueryStartDate());
-		assertEquals(endDate, response.getQueryEndDate());
-		assertNotNull(response.getMonthlyRewards());
-		assertNotNull(response.getTransactions());
-	}
-
-	@Test
-	void testCalculateRewardsForNonExistentCustomer() {
-		LocalDate startDate = LocalDate.of(2026, 1, 1);
-		LocalDate endDate = LocalDate.of(2026, 3, 31);
-
-		assertThrows(CustomerNotFoundException.class, () ->
-				rewardCalculationService.calculateRewardsForCustomer(999L, startDate, endDate),
-				"Non-existent customer should throw CustomerNotFoundException");
-	}
-
-	@Test
-	void testCalculateRewardsWithInvalidDateRange() {
-		LocalDate startDate = LocalDate.of(2026, 3, 31);
-		LocalDate endDate = LocalDate.of(2026, 1, 1);
-
-		assertThrows(InvalidInputException.class, () ->
-				rewardCalculationService.calculateRewardsForCustomer(1L, startDate, endDate),
-				"Start date after end date should throw InvalidInputException");
-	}
-
-	@Test
-	void testCalculateRewardsWithNullDates() {
-		RewardsResponse response = rewardCalculationService.calculateRewardsForCustomer(
-				1L, null, null);
-
-		assertNotNull(response);
-		assertEquals(1L, response.getCustomerId());
-	}
-
-	@Test
-	void testCalculateRewardsTotalPoints() {
-		LocalDate startDate = LocalDate.of(2026, 1, 1);
-		LocalDate endDate = LocalDate.of(2026, 3, 31);
-
-		RewardsResponse response = rewardCalculationService.calculateRewardsForCustomer(
-				1L, startDate, endDate);
-
-		assertNotNull(response);
-		assertNotNull(response.getMonthlyRewards());
-
-		// Verify monthly rewards sum equals total rewards
-		long totalFromMonthly = response.getMonthlyRewards().stream()
-				.mapToLong(m -> m.getRewardsEarned())
+		long sumFromMonthly = response.getMonthlyRewards().stream()
+				.mapToLong(RewardsResponse.MonthlyRewards::getRewardsEarned)
 				.sum();
-		assertEquals(response.getTotalRewardsPoints(), totalFromMonthly,
-				"Total rewards should equal sum of monthly rewards");
+		assertEquals(response.getTotalRewardsPoints(), sumFromMonthly);
 	}
 
 	@Test
-	void testCalculateRewardsForCustomerWithNoTransactions() {
-		// Query for future dates when no transactions exist
-		LocalDate startDate = LocalDate.of(2026, 5, 1);
-		LocalDate endDate = LocalDate.of(2026, 5, 31);
+	void calculateRewards_multipleCustomers_returnsOneEntryEach() {
+		when(customerService.getAllCustomers()).thenReturn(Arrays.asList(customer1, customer2));
+		when(customerService.getCustomer(1L)).thenReturn(Optional.of(customer1));
+		when(customerService.getCustomer(2L)).thenReturn(Optional.of(customer2));
+		when(dataService.getTransactionsByCustomerId(1L)).thenReturn(Collections.emptyList());
+		when(dataService.getTransactionsByCustomerId(2L)).thenReturn(Collections.emptyList());
 
-		RewardsResponse response = rewardCalculationService.calculateRewardsForCustomer(
-				1L, startDate, endDate);
+		List<RewardsResponse> result = service.calculateRewardsForAllCustomers("2026-01-01", "2026-03-31");
+		assertEquals(2, result.size());
+	}
 
-		assertEquals(0, response.getTransactionCount(),
-				"Customer with no transactions in date range should have 0 transaction count");
-		assertEquals(0, response.getTotalRewardsPoints(),
-				"Customer with no transactions should have 0 total rewards points");
+	@Test
+	void calculateRewards_amountBelowFifty_earnsZeroPoints() {
+		Transaction txn = new Transaction(1L, 1L, new BigDecimal("45.00"), LocalDate.of(2026, 1, 10));
+		when(customerService.getAllCustomers()).thenReturn(Collections.singletonList(customer1));
+		when(customerService.getCustomer(1L)).thenReturn(Optional.of(customer1));
+		when(dataService.getTransactionsByCustomerId(1L)).thenReturn(Collections.singletonList(txn));
+
+		List<RewardsResponse> result = service.calculateRewardsForAllCustomers("2026-01-01", "2026-01-31");
+		assertEquals(0L, result.get(0).getTotalRewardsPoints());
 	}
 }

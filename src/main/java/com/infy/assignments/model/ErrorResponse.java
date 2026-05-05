@@ -1,9 +1,10 @@
 package com.infy.assignments.model;
 
 public class ErrorResponse {
-	private String errorCode;
-	private String message;
-	private int statusCode;
+
+	private final String errorCode;
+	private final String message;
+	private final int statusCode;
 
 	public ErrorResponse(String errorCode, String message, int statusCode) {
 		this.errorCode = errorCode;

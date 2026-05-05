@@ -4,10 +4,12 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+
 import com.infy.assignments.model.Transaction;
 
 @Service
@@ -18,6 +20,7 @@ public class DataService {
 
 	public DataService() {
 		this.mockTransactions = initializeMockData();
+		logger.info("Initialized {} mock transactions", mockTransactions.size());
 	}
 
 	private List<Transaction> initializeMockData() {
@@ -47,20 +50,14 @@ public class DataService {
 		transactions.add(new Transaction(17L, 3L, new BigDecimal("300.00"), LocalDate.of(2026, 2, 28)));
 		transactions.add(new Transaction(18L, 3L, new BigDecimal("90.00"),  LocalDate.of(2026, 3, 12)));
 
-		logger.info("Initialized {} mock transactions", transactions.size());
 		return transactions;
-	}
-
-	public CompletableFuture<List<Transaction>> getTransactionsByCustomerIdAsync(Long customerId) {
-		logger.debug("Fetching transactions asynchronously for customer: {}", customerId);
-		return CompletableFuture.supplyAsync(() -> getTransactionsByCustomerId(customerId));
 	}
 
 	public List<Transaction> getTransactionsByCustomerId(Long customerId) {
 		logger.debug("Fetching transactions for customer: {}", customerId);
 		return mockTransactions.stream()
 				.filter(txn -> txn.getCustomerId().equals(customerId))
-				.collect(java.util.stream.Collectors.toList());
+				.collect(Collectors.toList());
 	}
 
 	public List<Transaction> getAllTransactions() {

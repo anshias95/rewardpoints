@@ -3,6 +3,7 @@ package com.infy.assignments.controller;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +15,8 @@ import org.springframework.web.context.WebApplicationContext;
 @SpringBootTest
 class RewardsControllerTest {
 
+	private static final String CALCULATE_URL = "/api/v1/rewards/calculate";
+
 	@Autowired
 	private WebApplicationContext webApplicationContext;
 
@@ -21,53 +24,89 @@ class RewardsControllerTest {
 
 	@BeforeEach
 	void setUp() {
-		this.mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+		mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
 	}
 
+	// --- Happy path ---
+
 	@Test
-	void testGetRewardsWithValidCustomerAndDates() throws Exception {
-		mockMvc.perform(get("/api/rewards/1")
+	void calculateRewards_withBothDates_returnsAllCustomers() throws Exception {
+		mockMvc.perform(get(CALCULATE_URL)
 				.param("startDate", "2026-01-01")
 				.param("endDate", "2026-03-31"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.customerId").value(1))
-				.andExpect(jsonPath("$.customerName").value("John Doe"))
-				.andExpect(jsonPath("$.email").value("john.doe@example.com"))
-				.andExpect(jsonPath("$.queryStartDate").value("2026-01-01"))
-				.andExpect(jsonPath("$.queryEndDate").value("2026-03-31"))
-				.andExpect(jsonPath("$.totalRewardsPoints").isNumber())
-				.andExpect(jsonPath("$.monthlyRewards").isArray());
+				.andExpect(jsonPath("$").isArray())
+				.andExpect(jsonPath("$.length()").value(3));
 	}
 
 	@Test
-	void testGetRewardsWithValidCustomerNoDateRange() throws Exception {
-		mockMvc.perform(get("/api/rewards/2"))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.customerId").value(2))
-				.andExpect(jsonPath("$.customerName").value("Jane Smith"));
-	}
-
-	@Test
-	void testGetRewardsWithInvalidCustomerId() throws Exception {
-		mockMvc.perform(get("/api/rewards/999")
+	void calculateRewards_withBothDates_returnsCorrectStructurePerCustomer() throws Exception {
+		mockMvc.perform(get(CALCULATE_URL)
 				.param("startDate", "2026-01-01")
 				.param("endDate", "2026-03-31"))
-				.andExpect(status().isNotFound())
-				.andExpect(jsonPath("$.errorCode").value("CUSTOMER_NOT_FOUND"));
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].customerId").value(1))
+				.andExpect(jsonPath("$[0].customerName").value("John Doe"))
+				.andExpect(jsonPath("$[0].email").value("john.doe@example.com"))
+				.andExpect(jsonPath("$[0].queryStartDate").value("2026-01-01"))
+				.andExpect(jsonPath("$[0].queryEndDate").value("2026-03-31"))
+				.andExpect(jsonPath("$[0].totalRewardsPoints").isNumber())
+				.andExpect(jsonPath("$[0].transactionCount").isNumber())
+				.andExpect(jsonPath("$[0].totalPurchaseAmount").isNumber())
+				.andExpect(jsonPath("$[0].monthlyRewards").isArray())
+				.andExpect(jsonPath("$[0].transactions").isArray());
 	}
 
 	@Test
-	void testGetRewardsWithInvalidDateFormat() throws Exception {
-		mockMvc.perform(get("/api/rewards/1")
-				.param("startDate", "invalid-date")
+	void calculateRewards_withNoDates_defaultsToLastThreeMonths() throws Exception {
+		mockMvc.perform(get(CALCULATE_URL))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$").isArray())
+				.andExpect(jsonPath("$.length()").value(3));
+	}
+
+	@Test
+	void calculateRewards_withBothDates_monthlyBreakdownPresent() throws Exception {
+		mockMvc.perform(get(CALCULATE_URL)
+				.param("startDate", "2026-01-01")
+				.param("endDate", "2026-03-31"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].monthlyRewards[0].transactionCount").isNumber())
+				.andExpect(jsonPath("$[0].monthlyRewards[0].totalSpent").isNumber())
+				.andExpect(jsonPath("$[0].monthlyRewards[0].rewardsEarned").isNumber());
+	}
+
+	@Test
+	void calculateRewards_withDateRangeContainingNoTransactions_returnsZeroPoints() throws Exception {
+		mockMvc.perform(get(CALCULATE_URL)
+				.param("startDate", "2025-01-01")
+				.param("endDate", "2025-01-31"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].totalRewardsPoints").value(0))
+				.andExpect(jsonPath("$[0].transactionCount").value(0));
+	}
+
+	// --- Validation errors ---
+
+	@Test
+	void calculateRewards_withOnlyStartDate_returnsBadRequest() throws Exception {
+		mockMvc.perform(get(CALCULATE_URL)
+				.param("startDate", "2026-01-01"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errorCode").value("INVALID_INPUT"));
+	}
+
+	@Test
+	void calculateRewards_withOnlyEndDate_returnsBadRequest() throws Exception {
+		mockMvc.perform(get(CALCULATE_URL)
 				.param("endDate", "2026-03-31"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.errorCode").value("INVALID_INPUT"));
 	}
 
 	@Test
-	void testGetRewardsWithStartDateAfterEndDate() throws Exception {
-		mockMvc.perform(get("/api/rewards/1")
+	void calculateRewards_withStartDateAfterEndDate_returnsBadRequest() throws Exception {
+		mockMvc.perform(get(CALCULATE_URL)
 				.param("startDate", "2026-03-31")
 				.param("endDate", "2026-01-01"))
 				.andExpect(status().isBadRequest())
@@ -75,8 +114,8 @@ class RewardsControllerTest {
 	}
 
 	@Test
-	void testGetRewardsWithFutureEndDate() throws Exception {
-		mockMvc.perform(get("/api/rewards/1")
+	void calculateRewards_withFutureEndDate_returnsBadRequest() throws Exception {
+		mockMvc.perform(get(CALCULATE_URL)
 				.param("startDate", "2026-01-01")
 				.param("endDate", "2099-12-31"))
 				.andExpect(status().isBadRequest())
@@ -84,68 +123,29 @@ class RewardsControllerTest {
 	}
 
 	@Test
-	void testGetRewardsContainsTransactionDetails() throws Exception {
-		mockMvc.perform(get("/api/rewards/1")
-				.param("startDate", "2026-01-01")
+	void calculateRewards_withInvalidStartDateFormat_returnsBadRequest() throws Exception {
+		mockMvc.perform(get(CALCULATE_URL)
+				.param("startDate", "01-01-2026")
 				.param("endDate", "2026-03-31"))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.transactions").isArray())
-				.andExpect(jsonPath("$.transactionCount").isNumber())
-				.andExpect(jsonPath("$.totalPurchaseAmount").isNumber());
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errorCode").value("INVALID_INPUT"));
 	}
 
 	@Test
-	void testGetRewardsContainsMonthlyBreakdown() throws Exception {
-		mockMvc.perform(get("/api/rewards/1")
+	void calculateRewards_withInvalidEndDateFormat_returnsBadRequest() throws Exception {
+		mockMvc.perform(get(CALCULATE_URL)
 				.param("startDate", "2026-01-01")
-				.param("endDate", "2026-03-31"))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.monthlyRewards").isArray())
-				.andExpect(jsonPath("$.monthlyRewards[0].month").exists())
-				.andExpect(jsonPath("$.monthlyRewards[0].transactionCount").isNumber())
-				.andExpect(jsonPath("$.monthlyRewards[0].totalSpent").isNumber())
-				.andExpect(jsonPath("$.monthlyRewards[0].rewardsEarned").isNumber());
+				.param("endDate", "not-a-date"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errorCode").value("INVALID_INPUT"));
 	}
 
 	@Test
-	void testGetRewardsForMultipleCustomers() throws Exception {
-		// Test customer 1
-		mockMvc.perform(get("/api/rewards/1")
-				.param("startDate", "2026-01-01")
-				.param("endDate", "2026-03-31"))
+	void calculateRewards_withSameStartAndEndDate_returnsOk() throws Exception {
+		mockMvc.perform(get(CALCULATE_URL)
+				.param("startDate", "2026-01-10")
+				.param("endDate", "2026-01-10"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.customerId").value(1));
-
-		// Test customer 2
-		mockMvc.perform(get("/api/rewards/2")
-				.param("startDate", "2026-01-01")
-				.param("endDate", "2026-03-31"))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.customerId").value(2));
-
-		// Test customer 3
-		mockMvc.perform(get("/api/rewards/3")
-				.param("startDate", "2026-01-01")
-				.param("endDate", "2026-03-31"))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.customerId").value(3));
-	}
-
-	@Test
-	void testGetRewardsResponseStructure() throws Exception {
-		mockMvc.perform(get("/api/rewards/1")
-				.param("startDate", "2026-01-01")
-				.param("endDate", "2026-03-31"))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.customerId").exists())
-				.andExpect(jsonPath("$.customerName").exists())
-				.andExpect(jsonPath("$.email").exists())
-				.andExpect(jsonPath("$.queryStartDate").exists())
-				.andExpect(jsonPath("$.queryEndDate").exists())
-				.andExpect(jsonPath("$.transactionCount").exists())
-				.andExpect(jsonPath("$.totalPurchaseAmount").exists())
-				.andExpect(jsonPath("$.totalRewardsPoints").exists())
-				.andExpect(jsonPath("$.monthlyRewards").exists())
-				.andExpect(jsonPath("$.transactions").exists());
+				.andExpect(jsonPath("$").isArray());
 	}
 }

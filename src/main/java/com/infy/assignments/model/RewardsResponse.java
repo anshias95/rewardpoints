@@ -7,19 +7,16 @@ import java.util.List;
 
 public class RewardsResponse {
 
-	private Long customerId;
-	private String customerName;
-	private String email;
-	private LocalDate queryStartDate;
-	private LocalDate queryEndDate;
-	private int transactionCount;
-	private BigDecimal totalPurchaseAmount;
-	private long totalRewardsPoints;
-	private List<MonthlyRewards> monthlyRewards;
-	private List<Transaction> transactions;
-
-	public RewardsResponse() {
-	}
+	private final Long customerId;
+	private final String customerName;
+	private final String email;
+	private final LocalDate queryStartDate;
+	private final LocalDate queryEndDate;
+	private final int transactionCount;
+	private final BigDecimal totalPurchaseAmount;
+	private final long totalRewardsPoints;
+	private final List<MonthlyRewards> monthlyRewards;
+	private final List<Transaction> transactions;
 
 	public RewardsResponse(Long customerId, String customerName, String email,
 			LocalDate queryStartDate, LocalDate queryEndDate, int transactionCount,
@@ -38,53 +35,28 @@ public class RewardsResponse {
 	}
 
 	public Long getCustomerId() { return customerId; }
-	public void setCustomerId(Long customerId) { this.customerId = customerId; }
-
 	public String getCustomerName() { return customerName; }
-	public void setCustomerName(String customerName) { this.customerName = customerName; }
-
 	public String getEmail() { return email; }
-	public void setEmail(String email) { this.email = email; }
-
 	public LocalDate getQueryStartDate() { return queryStartDate; }
-	public void setQueryStartDate(LocalDate queryStartDate) { this.queryStartDate = queryStartDate; }
-
 	public LocalDate getQueryEndDate() { return queryEndDate; }
-	public void setQueryEndDate(LocalDate queryEndDate) { this.queryEndDate = queryEndDate; }
-
 	public int getTransactionCount() { return transactionCount; }
-	public void setTransactionCount(int transactionCount) { this.transactionCount = transactionCount; }
-
 	public BigDecimal getTotalPurchaseAmount() { return totalPurchaseAmount; }
-	public void setTotalPurchaseAmount(BigDecimal totalPurchaseAmount) { this.totalPurchaseAmount = totalPurchaseAmount; }
-
 	public long getTotalRewardsPoints() { return totalRewardsPoints; }
-	public void setTotalRewardsPoints(long totalRewardsPoints) { this.totalRewardsPoints = totalRewardsPoints; }
-
 	public List<MonthlyRewards> getMonthlyRewards() { return monthlyRewards; }
-	public void setMonthlyRewards(List<MonthlyRewards> monthlyRewards) { this.monthlyRewards = monthlyRewards; }
-
 	public List<Transaction> getTransactions() { return transactions; }
-	public void setTransactions(List<Transaction> transactions) { this.transactions = transactions; }
 
 	@Override
 	public String toString() {
-		return "RewardsResponse{customerId=" + customerId + ", customerName='" + customerName + '\''
-				+ ", email='" + email + '\'' + ", queryStartDate=" + queryStartDate
-				+ ", queryEndDate=" + queryEndDate + ", transactionCount=" + transactionCount
-				+ ", totalPurchaseAmount=" + totalPurchaseAmount + ", totalRewardsPoints=" + totalRewardsPoints
-				+ ", monthlyRewards=" + monthlyRewards + ", transactions=" + transactions + '}';
+		return "RewardsResponse{customerId=" + customerId + ", customerName='" + customerName + "'"
+				+ ", totalRewardsPoints=" + totalRewardsPoints + "}";
 	}
 
 	public static class MonthlyRewards {
 
-		private YearMonth month;
-		private int transactionCount;
-		private BigDecimal totalSpent;
-		private long rewardsEarned;
-
-		public MonthlyRewards() {
-		}
+		private final YearMonth month;
+		private final int transactionCount;
+		private final BigDecimal totalSpent;
+		private final long rewardsEarned;
 
 		public MonthlyRewards(YearMonth month, int transactionCount, BigDecimal totalSpent, long rewardsEarned) {
 			this.month = month;
@@ -94,21 +66,14 @@ public class RewardsResponse {
 		}
 
 		public YearMonth getMonth() { return month; }
-		public void setMonth(YearMonth month) { this.month = month; }
-
 		public int getTransactionCount() { return transactionCount; }
-		public void setTransactionCount(int transactionCount) { this.transactionCount = transactionCount; }
-
 		public BigDecimal getTotalSpent() { return totalSpent; }
-		public void setTotalSpent(BigDecimal totalSpent) { this.totalSpent = totalSpent; }
-
 		public long getRewardsEarned() { return rewardsEarned; }
-		public void setRewardsEarned(long rewardsEarned) { this.rewardsEarned = rewardsEarned; }
 
 		@Override
 		public String toString() {
 			return "MonthlyRewards{month=" + month + ", transactionCount=" + transactionCount
-					+ ", totalSpent=" + totalSpent + ", rewardsEarned=" + rewardsEarned + '}';
+					+ ", totalSpent=" + totalSpent + ", rewardsEarned=" + rewardsEarned + "}";
 		}
 	}
 }

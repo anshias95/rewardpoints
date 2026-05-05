@@ -5,19 +5,10 @@ import java.time.LocalDate;
 
 public class Transaction {
 
-	private Long id;
-	private Long customerId;
-	private BigDecimal amount;
-	private LocalDate transactionDate;
-
-	public Transaction() {
-	}
-
-	public Transaction(Long customerId, BigDecimal amount, LocalDate transactionDate) {
-		this.customerId = customerId;
-		this.amount = amount;
-		this.transactionDate = transactionDate;
-	}
+	private final Long id;
+	private final Long customerId;
+	private final BigDecimal amount;
+	private final LocalDate transactionDate;
 
 	public Transaction(Long id, Long customerId, BigDecimal amount, LocalDate transactionDate) {
 		this.id = id;
@@ -26,45 +17,14 @@ public class Transaction {
 		this.transactionDate = transactionDate;
 	}
 
-	public Long getId() {
-		return id;
-	}
-
-	public void setId(Long id) {
-		this.id = id;
-	}
-
-	public Long getCustomerId() {
-		return customerId;
-	}
-
-	public void setCustomerId(Long customerId) {
-		this.customerId = customerId;
-	}
-
-	public BigDecimal getAmount() {
-		return amount;
-	}
-
-	public void setAmount(BigDecimal amount) {
-		this.amount = amount;
-	}
-
-	public LocalDate getTransactionDate() {
-		return transactionDate;
-	}
-
-	public void setTransactionDate(LocalDate transactionDate) {
-		this.transactionDate = transactionDate;
-	}
+	public Long getId() { return id; }
+	public Long getCustomerId() { return customerId; }
+	public BigDecimal getAmount() { return amount; }
+	public LocalDate getTransactionDate() { return transactionDate; }
 
 	@Override
 	public String toString() {
-		return "Transaction{" +
-				"id=" + id +
-				", customerId=" + customerId +
-				", amount=" + amount +
-				", transactionDate=" + transactionDate +
-				'}';
+		return "Transaction{id=" + id + ", customerId=" + customerId
+				+ ", amount=" + amount + ", transactionDate=" + transactionDate + "}";
 	}
 }
